@@ -4,8 +4,8 @@
 #
 # @note
 #   A map file contains one key + value per line. These key-value pairs are
-#   specified in the `mappings` array.
-#
+#   specified in the `mappings` array or by additional `haproxy::mapfile::entry`
+#   definitions.
 #
 # @param name
 #   The namevar of the defined resource type is the filename of the map file
@@ -35,24 +35,31 @@
 #   multiple HAproxy instances. Default: `[ 'haproxy' ]`
 #
 define haproxy::mapfile (
-  Array $mappings                   = [],
-  Enum['present', 'absent'] $ensure = 'present',
-  $owner                            = 'root',
-  $group                            = 'root',
-  $mode                             = '0644',
-  Array $instances                  = ['haproxy'],
+  Array[Variant[String, Hash]] $mappings = [],
+  Enum['present', 'absent']    $ensure   = 'present',
+  $owner                                 = 'root',
+  $group                                 = 'root',
+  $mode                                  = '0644',
+  Array $instances                       = [ 'haproxy' ],
 ) {
   $mapfile_name = $title
 
   $_instances = flatten($instances)
 
-  file { "haproxy_mapfile_${mapfile_name}":
+  $_mapfile_name = "${::haproxy::config_dir}/${mapfile_name}.map"
+
+  concat { "haproxy_mapfile_${mapfile_name}":
     ensure  => $ensure,
     owner   => $owner,
     group   => $group,
     mode    => $mode,
-    content => template('haproxy/haproxy_mapfile.erb'),
-    path    => "${haproxy::config_dir}/${mapfile_name}.map",
+    path    => $_mapfile_name,
     notify  => Haproxy::Service[$_instances],
+  }
+
+  concat::fragment { "haproxy_mapfile_${mapfile_name}-top":
+    target  => $_mapfile_name,
+    content => template('haproxy/haproxy_mapfile.erb'),
+    order   => '00',
   }
 }
