@@ -57,4 +57,196 @@ describe 'create mapfiles' do
       expect(file('/etc/haproxy/multiple-mapfiles.map').content).to match "example.org bk_org\nexample.edu bk_edu\nexample.com bk_com\nexample.net bk_net\n"
     end
   end
+
+  describe 'check selection of correct backend' do
+    describe 'single mapfile' do
+      let(:pp) do
+        <<-MANIFEST
+          $error_page_content = @(ERROR_PAGE)
+            HTTP/1.1 421 Misdirected Request
+            Cache-Control: no-cache
+            Connection: close
+            Content-Type: text/plain
+
+            Error Page
+            |ERROR_PAGE
+
+        file { '/tmp/error.html.http':
+          content => $error_page_content,
+        }
+        file_line {'host2':
+          path => '/etc/hosts',
+          line => '127.0.0.2 host2',
+        }
+        file_line {'host3':
+          path => '/etc/hosts',
+          line => '127.0.0.3 host3',
+        }
+        include ::haproxy
+        haproxy::mapfile { 'single-mapfile':
+          ensure   => 'present',
+          mappings => [
+            { 'host2' => 'backend2' },
+            { 'host3' => 'backend3' },
+          ],
+        }
+        haproxy::listen { 'test00':
+          bind    => {
+            '127.0.0.1:80' => [],
+            '127.0.0.2:80' => [],
+            '127.0.0.3:80' => [],
+          },
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/single-mapfile.map,backend1)]'
+          },
+        }
+        haproxy::backend { 'backend1':
+          mode    => 'http',
+          options => [
+            {
+              'errorfile' => [
+                '503 /tmp/error.html.http',
+              ],
+            },
+          ],
+        }
+        haproxy::backend { 'backend2':
+          defaults         => 'http',
+          collect_exported => false,
+          options          => { 'mode' => 'http' },
+        }
+        haproxy::balancermember { 'port 5556':
+          listening_service => 'backend2',
+          server_names      => 'test00.example.com',
+          defaults          => 'http',
+          ports             => '5556',
+        }
+        haproxy::backend { 'backend3':
+          defaults         => 'http',
+          collect_exported => false,
+          options          => { 'mode' => 'http' },
+        }
+        haproxy::balancermember { 'port 5557':
+          listening_service => 'backend3',
+          server_names      => 'test01.example.com',
+          defaults          => 'http',
+          ports             => '5557',
+        }
+        MANIFEST
+      end
+
+      it 'is able to listen with a mapfile' do
+        retry_on_error_matching do
+          apply_manifest(pp, catch_failures: true)
+        end
+      end
+
+      it 'has a complete mapfile' do
+        expect(file('/etc/haproxy/single-mapfile.map')).to be_file
+        expect(file('/etc/haproxy/single-mapfile.map').content).to match "host2 backend2\nhost3 backend3\n"
+      end
+
+      it 'selects the correct backend based on host' do
+        expect(run_shell('curl localhost').stdout.chomp).to match(%r{Error Page})
+        expect(run_shell('curl host2').stdout.chomp).to match(%r{Response on 5556})
+        expect(run_shell('curl host3').stdout.chomp).to match(%r{Response on 5557})
+      end
+    end
+
+    describe 'multiple mapfiles' do
+      let(:pp) do
+        <<-MANIFEST
+          $error_page_content = @(ERROR_PAGE)
+            HTTP/1.1 421 Misdirected Request
+            Cache-Control: no-cache
+            Connection: close
+            Content-Type: text/plain
+
+            Error Page
+            |ERROR_PAGE
+
+        file { '/tmp/error.html.http':
+          content => $error_page_content,
+        }
+        file_line {'host2':
+          path => '/etc/hosts',
+          line => '127.0.0.2 host2',
+        }
+        file_line {'host3':
+          path => '/etc/hosts',
+          line => '127.0.0.3 host3',
+        }
+        include ::haproxy
+        haproxy::mapfile { 'multiple-mapfiles':
+          ensure   => 'present',
+        }
+        haproxy::mapfile::entry { 'host2 backend2':
+          mapfile  => 'multiple-mapfiles',
+        }
+        haproxy::mapfile::entry { 'host3 backend3':
+          mapfile  => 'multiple-mapfiles',
+        }
+        haproxy::listen { 'test00':
+          bind    => {
+            '127.0.0.1:80' => [],
+            '127.0.0.2:80' => [],
+            '127.0.0.3:80' => [],
+          },
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/multiple-mapfiles.map,backend1)]'
+          },
+        }
+        haproxy::backend { 'backend1':
+          mode    => 'http',
+          options => [
+            {
+              'errorfile' => [
+                '503 /tmp/error.html.http',
+              ],
+            },
+          ],
+        }
+        haproxy::backend { 'backend2':
+          defaults         => 'http',
+          collect_exported => false,
+          options          => { 'mode' => 'http' },
+        }
+        haproxy::balancermember { 'port 5556':
+          listening_service => 'backend2',
+          server_names      => 'test00.example.com',
+          defaults          => 'http',
+          ports             => '5556',
+        }
+        haproxy::backend { 'backend3':
+          defaults         => 'http',
+          collect_exported => false,
+          options          => { 'mode' => 'http' },
+        }
+        haproxy::balancermember { 'port 5557':
+          listening_service => 'backend3',
+          server_names      => 'test01.example.com',
+          defaults          => 'http',
+          ports             => '5557',
+        }
+        MANIFEST
+      end
+
+      it 'is able to listen with a mapfile' do
+        retry_on_error_matching do
+          apply_manifest(pp, catch_failures: true)
+        end
+      end
+
+      it 'has a complete mapfile' do
+        expect(file('/etc/haproxy/multiple-mapfiles.map')).to be_file
+        expect(file('/etc/haproxy/multiple-mapfiles.map').content).to match "host2 backend2\nhost3 backend3\n"
+      end
+
+      it 'selects the correct backend based on host' do
+        expect(run_shell('curl localhost').stdout.chomp).to match(%r{Error Page})
+        expect(run_shell('curl host2').stdout.chomp).to match(%r{Response on 5556})
+        expect(run_shell('curl host3').stdout.chomp).to match(%r{Response on 5557})
+      end
+    end
+  end
 end
