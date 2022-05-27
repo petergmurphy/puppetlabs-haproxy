@@ -100,6 +100,15 @@ describe 'create mapfiles' do
             'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/single-mapfile.map,backend1)]'
           },
         }
+        haproxy::frontend { 'frontend1':
+          ipaddress => 'localhost',
+          mode      => 'http',
+          ports     => '5555',
+          defaults  => 'http',
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/single-mapfile.map,backend1)]'
+          },
+        }
         haproxy::backend { 'backend1':
           mode    => 'http',
           options => [
@@ -109,6 +118,15 @@ describe 'create mapfiles' do
               ],
             },
           ],
+        }
+        haproxy::frontend { 'frontend2':
+          ipaddress => 'host2',
+          mode      => 'http',
+          ports     => '5555',
+          defaults  => 'http',
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/single-mapfile.map,backend1)]'
+          },
         }
         haproxy::backend { 'backend2':
           defaults         => 'http',
@@ -120,6 +138,15 @@ describe 'create mapfiles' do
           server_names      => 'test00.example.com',
           defaults          => 'http',
           ports             => '5556',
+        }
+        haproxy::frontend { 'backend3':
+          ipaddress => 'host3',
+          mode      => 'http',
+          ports     => '5555',
+          defaults  => 'http',
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/single-mapfile.map,backend1)]'
+          },
         }
         haproxy::backend { 'backend3':
           defaults         => 'http',
@@ -147,9 +174,9 @@ describe 'create mapfiles' do
       end
 
       it 'selects the correct backend based on host' do
-        expect(run_shell('curl localhost').stdout.chomp).to match(%r{Error Page})
-        expect(run_shell('curl host2').stdout.chomp).to match(%r{Response on 5556})
-        expect(run_shell('curl host3').stdout.chomp).to match(%r{Response on 5557})
+        expect(run_shell('curl localhost:5555').stdout.chomp).to match(%r{Error Page})
+        expect(run_shell('curl host2:5555').stdout.chomp).to match(%r{Response on 5556})
+        expect(run_shell('curl host3:5555').stdout.chomp).to match(%r{Response on 5557})
       end
     end
 
@@ -196,6 +223,15 @@ describe 'create mapfiles' do
             'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/multiple-mapfiles.map,backend1)]'
           },
         }
+        haproxy::frontend { 'backend1':
+          ipaddress => 'localhost',
+          mode      => 'http',
+          ports     => '5555',
+          defaults  => 'http',
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/multiple-mapfiles.map,backend1)]'
+          },
+        }
         haproxy::backend { 'backend1':
           mode    => 'http',
           options => [
@@ -205,6 +241,15 @@ describe 'create mapfiles' do
               ],
             },
           ],
+        }
+        haproxy::frontend { 'backend2':
+          ipaddress => 'host2',
+          mode      => 'http',
+          ports     => '5555',
+          defaults  => 'http',
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/multiple-mapfiles.map,backend1)]'
+          },
         }
         haproxy::backend { 'backend2':
           defaults         => 'http',
@@ -216,6 +261,15 @@ describe 'create mapfiles' do
           server_names      => 'test00.example.com',
           defaults          => 'http',
           ports             => '5556',
+        }
+        haproxy::frontend { 'backend3':
+          ipaddress => 'host3',
+          mode      => 'http',
+          ports     => '5555',
+          defaults  => 'http',
+          options => {
+            'use_backend' => '%[req.hdr(host),lower,map_dom(/etc/haproxy/multiple-mapfiles.map,backend1)]'
+          },
         }
         haproxy::backend { 'backend3':
           defaults         => 'http',
@@ -243,9 +297,9 @@ describe 'create mapfiles' do
       end
 
       it 'selects the correct backend based on host' do
-        expect(run_shell('curl localhost').stdout.chomp).to match(%r{Error Page})
-        expect(run_shell('curl host2').stdout.chomp).to match(%r{Response on 5556})
-        expect(run_shell('curl host3').stdout.chomp).to match(%r{Response on 5557})
+        expect(run_shell('curl localhost:5555').stdout.chomp).to match(%r{Error Page})
+        expect(run_shell('curl host2:5555').stdout.chomp).to match(%r{Response on 5556})
+        expect(run_shell('curl host3:5555').stdout.chomp).to match(%r{Response on 5557})
       end
     end
   end
